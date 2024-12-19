@@ -4,6 +4,7 @@ import { ref, onValue, push, set, get } from 'firebase/database';
 import { useAuth } from './AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import toast from 'react-hot-toast';
 
 interface ChatUser {
   uid: string;
@@ -80,7 +81,58 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return onValue(requestsRef, (snapshot) => {
       const requests: ChatRequest[] = [];
       snapshot.forEach((child) => {
-        requests.push({ id: child.key!, ...child.val() });
+        const request = { id: child.key!, ...child.val() };
+        requests.push(request);
+        
+        // Show toast for new pending requests
+        if (request.status === 'pending' && request.timestamp > Date.now() - 5000) {
+          // Get sender's display name
+          const senderRef = ref(realtimeDb, `users/${request.senderId}`);
+          get(senderRef).then((senderSnapshot) => {
+            const sender = senderSnapshot.val();
+            const senderName = sender?.displayName || sender?.email || 'Someone';
+            
+            toast.custom((t) => (
+              <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+                <div className="flex-1 w-0 p-4">
+                  <div className="flex items-start">
+                    <div className="ml-3 flex-1">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        New Friend Request
+                      </p>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {senderName} wants to connect with you!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex border-l border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => {
+                      acceptChatRequest(request.id);
+                      toast.dismiss(t.id);
+                    }}
+                    className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 focus:outline-none"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => {
+                      rejectChatRequest(request.id);
+                      toast.dismiss(t.id);
+                    }}
+                    className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300 focus:outline-none"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ), {
+              duration: 5000,
+              position: 'top-right',
+            });
+          });
+        }
       });
       setChatRequests(requests);
     });
@@ -185,15 +237,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const acceptChatRequest = async (requestId: string) => {
     if (!user) return;
     
-    const requestRef = ref(realtimeDb, `chatRequests/${user.uid}/${requestId}`);
-    await set(requestRef, { status: 'accepted' });
+    try {
+      const requestRef = ref(realtimeDb, `chatRequests/${user.uid}/${requestId}`);
+      await set(requestRef, { status: 'accepted' });
+      toast.success('Friend request accepted!');
+    } catch (error) {
+      console.error('Error accepting chat request:', error);
+      toast.error('Failed to accept friend request');
+    }
   };
 
   const rejectChatRequest = async (requestId: string) => {
     if (!user) return;
     
-    const requestRef = ref(realtimeDb, `chatRequests/${user.uid}/${requestId}`);
-    await set(requestRef, { status: 'rejected' });
+    try {
+      const requestRef = ref(realtimeDb, `chatRequests/${user.uid}/${requestId}`);
+      await set(requestRef, { status: 'rejected' });
+      toast.success('Friend request rejected');
+    } catch (error) {
+      console.error('Error rejecting chat request:', error);
+      toast.error('Failed to reject friend request');
+    }
   };
 
   const searchUsers = async (query: string): Promise<ChatUser[]> => {
@@ -263,15 +327,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setSelectedUser,
         messages,
         sendMessage,
-        sendChatRequest,
-        acceptChatRequest,
-        rejectChatRequest,
         chatRequests,
         chatUsers,
-        searchUsers,
         isLoadingUsers,
         filteredUsers,
         setFilteredUsers,
+        sendChatRequest,
+        acceptChatRequest,
+        rejectChatRequest,
         adminMessages,
         markAdminMessageAsRead,
       }}

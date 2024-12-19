@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "friendRequests": {
+      "$requestId": {
+        ".read": "auth != null && (data.child('senderId').val() === auth.uid || data.child('receiverId').val() === auth.uid)",
+        ".write": "auth != null && (!data.exists() || data.child('senderId').val() === auth.uid || data.child('receiverId').val() === auth.uid)"
+      }
+    },
+    "users": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && $userId === auth.uid"
+      }
+    }
+  }
+}

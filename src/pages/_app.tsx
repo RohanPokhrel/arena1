@@ -10,6 +10,7 @@ import { useRouter } from 'next/router';
 import '@/styles/globals.css';
 import { WalletProvider } from '@/contexts/WalletContext';
 import { ChatProvider } from '@/contexts/ChatContext';
+import { Toaster } from 'react-hot-toast';
 
 export default function MyApp({ Component, pageProps }: AppProps): JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +61,23 @@ export default function MyApp({ Component, pageProps }: AppProps): JSX.Element {
       <ChatProvider>
         <WalletProvider>
           <ThemeProvider attribute="class" defaultTheme="system">
+            <Toaster
+              toastOptions={{
+                className: '',
+                style: {
+                  border: '1px solid #713200',
+                  padding: '16px',
+                  color: '#713200',
+                },
+                success: {
+                  duration: 5000,
+                  iconTheme: {
+                    primary: '#059669',
+                    secondary: '#ffffff',
+                  },
+                },
+              }}
+            />
             {isPublicPage ? (
               <Component {...pageProps} />
             ) : (
