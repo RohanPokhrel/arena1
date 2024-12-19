@@ -8,6 +8,8 @@ import { Layout } from '@/components/layout/Layout';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useRouter } from 'next/router';
 import '@/styles/globals.css';
+import { WalletProvider } from '@/contexts/WalletContext';
+import { ChatProvider } from '@/contexts/ChatContext';
 
 export default function MyApp({ Component, pageProps }: AppProps): JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
@@ -55,15 +57,19 @@ export default function MyApp({ Component, pageProps }: AppProps): JSX.Element {
 
   return (
     <AuthProvider>
-      <ThemeProvider attribute="class" defaultTheme="system">
-        {isPublicPage ? (
-          <Component {...pageProps} />
-        ) : (
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
-        )}
-      </ThemeProvider>
+      <ChatProvider>
+        <WalletProvider>
+          <ThemeProvider attribute="class" defaultTheme="system">
+            {isPublicPage ? (
+              <Component {...pageProps} />
+            ) : (
+              <Layout>
+                <Component {...pageProps} />
+              </Layout>
+            )}
+          </ThemeProvider>
+        </WalletProvider>
+      </ChatProvider>
     </AuthProvider>
   );
 }

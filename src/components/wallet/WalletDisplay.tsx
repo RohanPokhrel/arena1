@@ -1,55 +1,67 @@
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import React from 'react';
+import { motion } from 'framer-motion';
+import { FaWallet, FaMoneyBillWave } from 'react-icons/fa';
+import { useWallet } from '@/contexts/WalletContext';
 
 export function WalletDisplay() {
-  const { user } = useAuth();
-  const [balance, setBalance] = useState(0);
-  const [totalDeposited, setTotalDeposited] = useState(0);
-  const [totalWithdrawn, setTotalWithdrawn] = useState(0);
+  const { balance, totalDeposited, totalWithdrawn, isLoading } = useWallet();
 
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    const userRef = doc(db, 'users', user.uid);
-    
-    const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
-      if (docSnapshot.exists()) {
-        const data = docSnapshot.data();
-        
-        // Force parse as numbers and set with default of 0
-        setBalance(Number(data.balance || 0));
-        setTotalDeposited(Number(data.totalDeposited || 0));
-        setTotalWithdrawn(Number(data.totalWithdrawn || 0));
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user?.uid]);
+  if (isLoading) {
+    return <div>Loading...</div>; // Add proper loading state UI
+  }
 
   return (
     <div className="space-y-6">
-      <div className="bg-purple-600 rounded-xl p-6">
-        <h2 className="text-white text-xl font-semibold mb-2">Current Balance</h2>
-        <p className="text-white text-3xl font-bold">
-          NPR {Number(balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+      >
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-2xl p-6 shadow-xl"
+        >
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+              <FaWallet className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-medium text-white">Current Balance</h3>
+          </div>
+          <p className="text-3xl font-bold text-white">
+            NPR {Number(balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
 
-      <div className="bg-green-600 rounded-xl p-6">
-        <h2 className="text-white text-xl font-semibold mb-2">Total Deposited</h2>
-        <p className="text-white text-3xl font-bold">
-          NPR {Number(totalDeposited).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </p>
-      </div>
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-6 shadow-xl"
+        >
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+              <FaMoneyBillWave className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-medium text-white">Total Deposited</h3>
+          </div>
+          <p className="text-3xl font-bold text-white">
+            NPR {Number(totalDeposited).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
 
-      <div className="bg-red-600 rounded-xl p-6">
-        <h2 className="text-white text-xl font-semibold mb-2">Total Withdrawn</h2>
-        <p className="text-white text-3xl font-bold">
-          NPR {Number(totalWithdrawn).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </p>
-      </div>
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl p-6 shadow-xl"
+        >
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+              <FaMoneyBillWave className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-lg font-medium text-white">Total Withdrawn</h3>
+          </div>
+          <p className="text-3xl font-bold text-white">
+            NPR {Number(totalWithdrawn).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }

@@ -9,9 +9,12 @@ import {
   GoogleAuthProvider,
   FacebookAuthProvider
 } from 'firebase/auth';
-import { auth, db, googleProvider, facebookProvider } from '@/lib/firebase';
+import { auth, db, googleProvider, facebookProvider, realtimeDb } from '@/lib/firebase';
 import { doc, setDoc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/router';
+import { ref, set, onDisconnect, get, update, onValue } from 'firebase/database';
+import { serverTimestamp } from 'firebase/database';
+import DeviceRestrictionMessage from '@/components/DeviceRestrictionMessage';
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +27,8 @@ interface AuthContextType {
   signUpWithEmail: (email: string, password: string, userData: any) => Promise<void>;
   signOut: () => Promise<void>;
   checkUsernameAvailability: (username: string) => Promise<boolean>;
+  isActiveSessionExists: boolean;
+  forceSignOutFromOtherDevices: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -41,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const [isActiveSessionExists, setIsActiveSessionExists] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -50,6 +56,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const userRef = ref(realtimeDb, `users/${user.uid}`);
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || user.email?.split('@')[0],
+      photoURL: user.photoURL,
+      online: true,
+      lastSeen: serverTimestamp(),
+      lastActive: serverTimestamp(),
+      deviceId: generateDeviceId(),
+      createdAt: user.metadata.creationTime || new Date().toISOString()
+    };
+
+    get(userRef).then((snapshot) => {
+      const existingData = snapshot.val();
+      
+      if (existingData && existingData.online && 
+          existingData.deviceId && 
+          existingData.deviceId !== userData.deviceId) {
+        console.log('Active session exists on another device');
+        setIsActiveSessionExists(true);
+        return;
+      }
+
+      set(userRef, userData).catch(error => {
+        console.error('Error saving user data:', error);
+      });
+
+      onDisconnect(userRef).update({
+        online: false,
+        lastSeen: serverTimestamp()
+      });
+    });
+
+    const deviceListener = onValue(userRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data && data.online && data.deviceId && data.deviceId !== userData.deviceId) {
+        setIsActiveSessionExists(true);
+      }
+    });
+
+    return () => {
+      deviceListener();
+      update(userRef, {
+        online: false,
+        lastSeen: serverTimestamp()
+      });
+    };
+  }, [user]);
+
+  const forceSignOutFromOtherDevices = async () => {
+    if (!user) return;
+    
+    const userRef = ref(realtimeDb, `users/${user.uid}`);
+    try {
+      await update(userRef, {
+        online: false,
+        lastSeen: serverTimestamp(),
+        deviceId: null
+      });
+      
+      localStorage.removeItem('deviceId');
+      
+      await firebaseSignOut(auth);
+      
+      setIsActiveSessionExists(false);
+      
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Error forcing sign out:', error);
+    }
+  };
+
+  const generateDeviceId = () => {
+    const browserInfo = `${navigator.userAgent}-${window.innerWidth}x${window.innerHeight}`;
+    const existingId = localStorage.getItem('deviceId');
+    
+    if (existingId) return existingId;
+    
+    const newId = btoa(`${browserInfo}-${Date.now()}`);
+    localStorage.setItem('deviceId', newId);
+    return newId;
+  };
 
   const signInWithGoogle = async () => {
     try {
@@ -152,9 +245,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUpWithEmail,
         signOut,
         checkUsernameAvailability,
+        isActiveSessionExists,
+        forceSignOutFromOtherDevices,
       }}
     >
-      {!loading && children}
+      {!loading && (isActiveSessionExists ? <DeviceRestrictionMessage /> : children)}
     </AuthContext.Provider>
   );
 } 

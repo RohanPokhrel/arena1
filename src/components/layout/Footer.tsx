@@ -77,21 +77,8 @@ export const Footer = () => {
     </div>
   );
 
-  if (isAdminPage) {
-    return (
-      <motion.footer 
-        className="bg-white dark:bg-gray-900 shadow-sm mt-auto"
-        initial={{ marginLeft: 256 }}
-        animate={{ marginLeft: isCollapsed ? 80 : 256 }}
-        transition={{ duration: 0.3 }}
-      >
-        {footerContent}
-      </motion.footer>
-    );
-  }
-
   return (
-    <footer className="bg-white dark:bg-gray-900 shadow-sm mt-auto">
+    <footer className="bg-white dark:bg-gray-900 shadow-sm mt-auto w-full">
       {footerContent}
     </footer>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaWallet, FaMoneyBillWave, FaHistory, FaRegClock, FaUser, FaClock, FaSpinner, FaCopy, FaInfoCircle, FaCheckCircle } from 'react-icons/fa';
 import { IoCheckmark } from 'react-icons/io5';
@@ -14,11 +14,13 @@ import { addDoc, collection, doc, increment, updateDoc } from 'firebase/firestor
 import { db } from '@/lib/firebase';
 import { toast } from 'react-toastify';
 import { PaymentMethod } from '@/types/payment';
+import { useWallet } from '@/contexts/WalletContext';
 
 interface WalletStats {
   currentBalance: number;
   totalDeposited: number;
   totalWithdrawn: number;
+  totalLost: number;
 }
 
 interface Transaction {
@@ -31,19 +33,7 @@ interface Transaction {
 
 export default function Wallet() {
   const { user } = useAuth();
-  const { 
-    stats, 
-    transactions, 
-    paymentMethods,
-    isLoading,
-    error,
-    fetchStats,
-    fetchTransactions,
-    fetchPaymentMethods,
-    initiateDeposit,
-    initiateWithdraw
-  } = usePaymentStore();
-
+  const { balance, totalDeposited, totalWithdrawn, totalLost, transactions, updateBalance } = useWallet();
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showAddPaymentMethodModal, setShowAddPaymentMethodModal] = useState(false);
@@ -51,14 +41,6 @@ export default function Wallet() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [gameId, setGameId] = useState('');
   const [isLoadingDeposit, setIsLoadingDeposit] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      fetchStats(user.uid);
-      fetchTransactions(user.uid);
-      fetchPaymentMethods(user.uid);
-    }
-  }, [user]);
 
   if (!user) {
     return (
@@ -70,6 +52,7 @@ export default function Wallet() {
 
   const handleConfirmDeposit = async () => {
     if (!user || !amount) return;
+    const amountNumber = parseFloat(amount);
     
     try {
       setIsLoadingDeposit(true);
@@ -79,20 +62,18 @@ export default function Wallet() {
         userId: user.uid,
         userEmail: user.email,
         type: 'deposit',
-        amount: parseFloat(amount),
-        status: 'pending',
+        amount: amountNumber,
+        status: 'completed',
         timestamp: new Date().toISOString(),
-        remarks: `Game ID: ${gameId}`,
+        remarks: gameId ? `Game ID: ${gameId}` : undefined,
       });
 
-      // Update user's wallet balance (you may want to do this after payment confirmation)
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        balance: increment(parseFloat(amount))
-      });
+      // Update balance using WalletContext
+      await updateBalance(amountNumber, 'deposit');
 
-      toast.success('Deposit initiated successfully!');
+      toast.success('Deposit completed successfully!');
       setAmount('');
+      setGameId('');
       setShowDepositModal(false);
     } catch (error) {
       console.error('Error processing deposit:', error);
@@ -103,58 +84,77 @@ export default function Wallet() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6">
+    <div className="min-h-screen bg-white text-gray-800 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Wallet Stats */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
+          className="grid grid-cols-2 gap-4 mb-6"
         >
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-r from-purple-600 to-purple-700 rounded-2xl p-6 shadow-xl"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <FaWallet className="w-6 h-6" />
+          {/* Current Balance */}
+          <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-4 shadow-lg">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <FaWallet className="w-5 h-5 text-white" />
+                <span className="text-sm text-white">Current Balance</span>
               </div>
-              <h3 className="text-lg font-medium">Current Balance</h3>
+              <div className="flex flex-col">
+                <span className="text-sm text-white">NPR</span>
+                <span className="text-2xl font-bold text-white">
+                  {formatCurrency(balance || 0)}
+                </span>
+              </div>
             </div>
-            <p className="text-3xl font-bold">
-              NPR {formatCurrency(stats?.currentBalance || 0)}
-            </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-r from-green-600 to-green-700 rounded-2xl p-6 shadow-xl"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <FaMoneyBillWave className="w-6 h-6" />
+          {/* Total Deposited */}
+          <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-4 shadow-lg">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <FaMoneyBillWave className="w-5 h-5 text-white" />
+                <span className="text-sm text-white">Total Deposited</span>
               </div>
-              <h3 className="text-lg font-medium">Total Deposited</h3>
+              <div className="flex flex-col">
+                <span className="text-sm text-white">NPR</span>
+                <span className="text-2xl font-bold text-white">
+                  {formatCurrency(totalDeposited || 0)}
+                </span>
+              </div>
             </div>
-            <p className="text-3xl font-bold">
-              NPR {formatCurrency(stats?.totalDeposited || 0)}
-            </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            className="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl p-6 shadow-xl"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <FaMoneyBillWave className="w-6 h-6" />
+          {/* Total Withdrawn */}
+          <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-4 shadow-lg">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <FaMoneyBillWave className="w-5 h-5 text-white" />
+                <span className="text-sm text-white">Total Withdrawn</span>
               </div>
-              <h3 className="text-lg font-medium">Total Withdrawn</h3>
+              <div className="flex flex-col">
+                <span className="text-sm text-white">NPR</span>
+                <span className="text-2xl font-bold text-white">
+                  {formatCurrency(totalWithdrawn || 0)}
+                </span>
+              </div>
             </div>
-            <p className="text-3xl font-bold">
-              NPR {formatCurrency(stats?.totalWithdrawn || 0)}
-            </p>
-          </motion.div>
+          </div>
+
+          {/* Total Lost */}
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-4 shadow-lg">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <FaMoneyBillWave className="w-5 h-5 text-white" />
+                <span className="text-sm text-white">Total Lost</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm text-white">NPR</span>
+                <span className="text-2xl font-bold text-white">
+                  {formatCurrency(totalLost || 0)}
+                </span>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Action Buttons */}
@@ -177,15 +177,15 @@ export default function Wallet() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-gray-800 rounded-2xl p-6 shadow-xl"
+          className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200"
         >
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Transaction History</h2>
+            <h2 className="text-2xl font-bold text-gray-800">Transaction History</h2>
             <FaHistory className="w-6 h-6 text-gray-400" />
           </div>
 
           <div className="space-y-4">
-            {transactions.length > 0 ? (
+            {transactions && transactions.length > 0 ? (
               transactions.map((transaction) => (
                 <motion.div
                   key={transaction.id}
@@ -193,24 +193,22 @@ export default function Wallet() {
                   animate={{ opacity: 1, x: 0 }}
                   className={`flex items-center justify-between p-4 rounded-xl ${
                     transaction.type === 'deposit' 
-                      ? 'bg-green-900/20' 
-                      : transaction.type === 'withdraw'
-                      ? 'bg-red-900/20'
-                      : 'bg-gray-700/20'
+                      ? 'bg-green-50 border border-green-100' 
+                      : 'bg-red-50 border border-red-100'
                   }`}
                 >
                   <div>
-                    <p className="font-medium">{transaction.description}</p>
-                    <p className="text-sm text-gray-400">
+                    <p className="font-medium text-gray-800">
+                      {transaction.remarks || `${transaction.type.charAt(0).toUpperCase()}${transaction.type.slice(1)}`}
+                    </p>
+                    <p className="text-sm text-gray-500">
                       {new Date(transaction.timestamp).toLocaleDateString()}
                     </p>
                   </div>
                   <div className={`font-bold ${
                     transaction.type === 'deposit' 
-                      ? 'text-green-400' 
-                      : transaction.type === 'withdraw'
-                      ? 'text-red-400'
-                      : 'text-gray-400'
+                      ? 'text-green-600' 
+                      : 'text-red-600'
                   }`}>
                     {transaction.type === 'deposit' ? '+' : '-'} NPR {formatCurrency(transaction.amount)}
                   </div>
@@ -273,8 +271,9 @@ export default function Wallet() {
         {showDepositModal && (
           <DepositModal
             onClose={() => setShowDepositModal(false)}
-            paymentMethods={paymentMethods}
-            onDeposit={initiateDeposit}
+            onDeposit={async (amount) => {
+              await updateBalance(parseFloat(amount), 'deposit');
+            }}
             userId={user.uid}
             onConfirm={handleConfirmDeposit}
             isLoading={isLoadingDeposit}
@@ -284,10 +283,10 @@ export default function Wallet() {
         {showWithdrawModal && (
           <WithdrawModal
             onClose={() => setShowWithdrawModal(false)}
-            paymentMethods={paymentMethods}
-            onWithdraw={initiateWithdraw}
-            userId={user.uid}
-            currentBalance={stats?.currentBalance || 0}
+            onWithdraw={async (amount) => {
+              await updateBalance(amount, 'withdraw');
+            }}
+            currentBalance={balance}
           />
         )}
       </AnimatePresence>

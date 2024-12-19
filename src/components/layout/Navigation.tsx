@@ -39,6 +39,11 @@ export const Navigation = () => {
                 <Link href="/leaderboard" className="text-gray-600 dark:text-gray-300 hover:text-purple-500">
                   Leaderboard
                 </Link>
+                {!isAdmin && (
+                  <Link href="/messages" className="text-gray-600 dark:text-gray-300 hover:text-purple-500">
+                    Messages
+                  </Link>
+                )}
               </>
             )}
           </div>

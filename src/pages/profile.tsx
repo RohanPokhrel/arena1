@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { usePaymentStore } from "@/store/paymentStore";
+import { useWallet } from '@/contexts/WalletContext';
 import { FaWallet, FaMoneyBillWave } from "react-icons/fa";
 import Link from "next/link";
 import { FiLogOut } from "react-icons/fi";
@@ -26,29 +26,27 @@ interface UserData {
 
 export default function Profile() {
   const { user, signOut } = useAuth();
+  const { balance, totalDeposited, totalWithdrawn } = useWallet();
   const [userData, setUserData] = useState<UserData | null>(null);
-  const { stats, fetchStats } = usePaymentStore();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (user) {
-      // Fetch user data
       const fetchUserData = async () => {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
           setUserData({
             ...data,
-            // Ensure numeric values have defaults
-            balance: Number(data.balance || 0),
-            totalDeposited: Number(data.totalDeposited || 0),
-            totalWithdrawn: Number(data.totalWithdrawn || 0)
+            username: data.username,
+            uid: data.uid,
+            stats: data.stats,
+            createdAt: data.createdAt,
           } as UserData);
         }
       };
 
       fetchUserData();
-      fetchStats(user.uid);
     }
   }, [user]);
 
@@ -164,7 +162,7 @@ export default function Profile() {
                   <span className="text-sm text-gray-200">Current Balance</span>
                 </div>
                 <p className="text-2xl font-bold">
-                  NPR {userData?.balance?.toLocaleString() || "0"}
+                  NPR {balance?.toLocaleString() || "0"}
                 </p>
               </div>
               <div className="bg-white/10 rounded-lg p-4">
@@ -173,7 +171,7 @@ export default function Profile() {
                   <span className="text-sm text-gray-200">Total Deposited</span>
                 </div>
                 <p className="text-2xl font-bold">
-                  NPR {userData?.totalDeposited?.toLocaleString() || "0"}
+                  NPR {totalDeposited?.toLocaleString() || "0"}
                 </p>
               </div>
             </div>
